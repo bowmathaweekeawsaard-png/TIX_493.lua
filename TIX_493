@@ -1,0 +1,72 @@
+-- [[ TSB Auto Behind & Invisibility Script ]] --
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+
+local DistanceBehind = 3 -- ระยะห่างที่จะให้อยู่ข้างหลังศัตรู (ปรับเพิ่ม/ลดได้)
+local TargetPlayer = nil
+local Connection = nil
+
+-- 1. ฟังก์ชั่นค้นหาเป้าหมาย (เลือกคนที่ยังไม่ตาย และไม่ใช่ตัวเรา)
+local function GetNextTarget()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+            local root = player.Character:FindFirstChild("HumanoidRootPart")
+            if humanoid and humanoid.Health > 0 and root then
+                return player
+            end
+        end
+    end
+    return nil
+end
+
+-- 2. ฟังก์ชั่นทำให้ตัวละครเราล่องหน (Invisibility)
+local function MakeInvisible(character)
+    for _, part in ipairs(character:GetDescendants()) do
+        if part:IsA("BasePart") or part:IsA("Decal") then
+            part.Transparency = 1
+        end
+    end
+end
+
+-- ระบบปรับล่องหนเมื่อตัวละครเกิดใหม่
+LocalPlayer.CharacterAdded:Connect(function(char)
+    char:WaitForChild("HumanoidRootPart")
+    task.wait(0.5)
+    MakeInvisible(char)
+end)
+
+if LocalPlayer.Character then
+    MakeInvisible(LocalPlayer.Character)
+end
+
+-- 3. Loop หลัก: ย้ายตำแหน่งไปอยู่ข้างหลังศัตรู และเปลี่ยนเป้าหมายเมื่อศัตรูตาย
+Connection = RunService.Heartbeat:Connect(function()
+    local myChar = LocalPlayer.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    
+    if not myRoot then return end
+
+    -- ตรวจสอบว่าเป้าหมายปัจจุบันยังอยู่นานหรือตายหรือยัง
+    if not TargetPlayer or not TargetPlayer.Character or 
+       not TargetPlayer.Character:FindFirstChild("HumanoidRootPart") or 
+       TargetPlayer.Character:FindFirstChildOfClass("Humanoid").Health <= 0 then
+        
+        -- ถ้าเป้าหมายตายหรือไม่มี ให้หาเป้าหมายใหม่ (ข้อ 3)
+        TargetPlayer = GetNextTarget()
+    end
+
+    -- ถ้ามีเป้าหมาย ให้ล็อคตำแหน่งอยู่ข้างหลังตลอดเวลา (ข้อ 1)
+    if TargetPlayer and TargetPlayer.Character and TargetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        local targetRoot = TargetPlayer.Character.HumanoidRootPart
+        
+        -- คำนวณตำแหน่งข้างหลังศัตรูตามทิศทางที่ศัตรูหันหน้าไป
+        local targetCFrame = targetRoot.CFrame
+        local behindCFrame = targetCFrame * CFrame.new(0, 0, DistanceBehind)
+        
+        -- หันหน้าไปทิศเดียวกับศัตรู
+        myRoot.CFrame = CFrame.new(behindCFrame.Position, behindCFrame.Position + targetCFrame.LookVector)
+    end
+end)
